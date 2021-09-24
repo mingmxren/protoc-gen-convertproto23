@@ -1,0 +1,5 @@
+TargetSyntax: proto2
+PackageReplaCe:
+  a_package: b_package
+ImportReplace:
+  proto3: proto2

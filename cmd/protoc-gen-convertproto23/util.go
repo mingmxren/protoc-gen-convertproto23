@@ -22,19 +22,19 @@ func Indent(s string, width int) string {
 	return r
 }
 
-func WithComments(s string, comments *protokit.Comment) string {
+func WithComments(s string, comments *protokit.Comment, baseIndex int) string {
 	sb := new(strings.Builder)
 	for _, c := range comments.Detached {
-		sb.WriteString(fmt.Sprintf("/*\n%s\n  */\n\n", Indent(c, 2)))
+		sb.WriteString(Indent(fmt.Sprintf("/*\n%s\n  */\n\n", Indent(c, 2)), baseIndex))
 	}
 	if len(comments.Leading) > 0 {
-		sb.WriteString(fmt.Sprintf("\n\n/*\n%s\n  */\n", Indent(comments.Leading, 2)))
+		sb.WriteString(Indent(fmt.Sprintf("\n\n/*\n%s\n  */\n", Indent(comments.Leading, 2)), baseIndex))
 	}
 	if len(s) > 0 && s[len(s)-1] == '\n' {
 		sb.WriteString(s[:len(s)-1])
 	}
 	if len(comments.Trailing) > 0 {
-		sb.WriteString(fmt.Sprintf("/* %s */\n", comments.Trailing))
+		sb.WriteString(fmt.Sprintf(" /* %s */\n", comments.Trailing))
 	} else {
 		sb.WriteString("\n")
 	}

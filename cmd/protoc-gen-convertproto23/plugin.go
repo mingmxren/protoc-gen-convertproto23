@@ -17,9 +17,9 @@ const (
 )
 
 type PluginOptions struct {
-	ConfigFile     string
 	PackageReplace map[string]string `yaml:"PackageReplace"`
 	ImportReplace  map[string]string `yaml:"ImportReplace"`
+	TargetSyntax   string            `yaml:"TargetSyntax"`
 }
 
 func (po *PluginOptions) ParseOptions(parameter string) {
@@ -35,21 +35,16 @@ func (po *PluginOptions) ParseOptions(parameter string) {
 
 func NewPluginOptions() *PluginOptions {
 	po := new(PluginOptions)
-	po.PackageReplace = make(map[string]string)
-	po.ImportReplace = make(map[string]string)
 	return po
 }
 
 type Plugin struct {
-	Opts         *PluginOptions
-	TargetSyntax string
+	Opts *PluginOptions
 }
 
 func NewPlugin() (pi *Plugin) {
 	pi = new(Plugin)
 	pi.Opts = NewPluginOptions()
-
-	pi.TargetSyntax = "proto2"
 
 	return pi
 }
@@ -87,18 +82,18 @@ func (pi *Plugin) GetStringLabel(label descriptorpb.FieldDescriptorProto_Label) 
 		return "repeated"
 	}
 
-	if pi.TargetSyntax == SyntaxProto3 {
+	if pi.Opts.TargetSyntax == SyntaxProto3 {
 		if label == descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL {
 			return ""
 		}
-	} else if pi.TargetSyntax == SyntaxProto2 {
+	} else if pi.Opts.TargetSyntax == SyntaxProto2 {
 		if label == descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL {
 			return "optional"
 		} else if label == descriptorpb.FieldDescriptorProto_LABEL_REQUIRED {
 			return "required"
 		}
 	}
-	log.Fatal(fmt.Sprintf("error label: %s TargetSyntax:%s", label, pi.TargetSyntax))
+	log.Fatal(fmt.Sprintf("error label: %s TargetSyntax:%s", label, pi.Opts.TargetSyntax))
 	return ""
 }
 
@@ -106,17 +101,17 @@ func (pi *Plugin) GenMessageDefine(msg *protokit.PKDescriptor) string {
 	sb := new(strings.Builder)
 	sb.WriteString(fmt.Sprintf("message %s {\n", msg.GetName()))
 	for _, subMsg := range msg.GetMessages() {
-		sb.WriteString(Indent(WithComments(pi.GenMessageDefine(subMsg), subMsg.Comments), 4))
+		sb.WriteString(Indent(WithComments(pi.GenMessageDefine(subMsg), subMsg.Comments, 4), 4))
 	}
 	for _, subEnum := range msg.GetEnums() {
-		sb.WriteString(Indent(WithComments(pi.GenEnumDefine(subEnum), subEnum.Comments), 4))
+		sb.WriteString(Indent(WithComments(pi.GenEnumDefine(subEnum), subEnum.Comments, 4), 4))
 	}
 	for _, field := range msg.GetMessageFields() {
 		sb.WriteString(WithComments(
 			fmt.Sprintf("    %s %s %s = %d;\n",
 				pi.GetStringLabel(field.GetLabel()), pi.ReplacePackage(GetStringType(field)),
 				field.GetName(), field.GetNumber(),
-			), field.Comments))
+			), field.Comments, 4))
 	}
 	sb.WriteString("}\n")
 	return sb.String()
@@ -125,7 +120,7 @@ func (pi *Plugin) GenEnumDefine(enum *protokit.PKEnumDescriptor) string {
 	sb := new(strings.Builder)
 	sb.WriteString(fmt.Sprintf("enum %s {\n", enum.GetName()))
 	for _, val := range enum.GetValues() {
-		sb.WriteString(WithComments(fmt.Sprintf("    %s = %d;\n", val.GetName(), val.GetNumber()), val.Comments))
+		sb.WriteString(WithComments(fmt.Sprintf("    %s = %d;\n", val.GetName(), val.GetNumber()), val.Comments, 4))
 	}
 	sb.WriteString("}\n")
 	return sb.String()
@@ -147,7 +142,7 @@ func (pi *Plugin) GenServiceDefine(service *protokit.PKServiceDescriptor) string
 	sb := new(strings.Builder)
 	sb.WriteString(fmt.Sprintf("service %s {\n", service.GetName()))
 	for _, method := range service.GetMethods() {
-		sb.WriteString(Indent(WithComments(pi.GenMethodDefine(method), method.Comments), 4))
+		sb.WriteString(WithComments(Indent(pi.GenMethodDefine(method), 4), method.Comments, 4))
 	}
 
 	sb.WriteString("}\n")
@@ -168,8 +163,8 @@ func (pi *Plugin) DealFile(pf *protokit.PKFileDescriptor) (*pluginpb.CodeGenerat
 
 	pb := new(strings.Builder)
 
-	pb.WriteString(WithComments(fmt.Sprintf("syntax = \"%s\";\n", pi.TargetSyntax), pf.SyntaxComments))
-	pb.WriteString(WithComments(fmt.Sprintf("package %s;\n", pi.ReplacePackage(pf.GetPackage())), pf.PackageComments))
+	pb.WriteString(WithComments(fmt.Sprintf("syntax = \"%s\";\n", pi.Opts.TargetSyntax), pf.SyntaxComments, 0))
+	pb.WriteString(WithComments(fmt.Sprintf("package %s;\n", pi.ReplacePackage(pf.GetPackage())), pf.PackageComments, 0))
 	for _, dep := range pf.Dependency {
 		pb.WriteString(fmt.Sprintf("import \"%s\";\n", pi.ReplacePath(dep)))
 	}
@@ -177,15 +172,15 @@ func (pi *Plugin) DealFile(pf *protokit.PKFileDescriptor) (*pluginpb.CodeGenerat
 		pb.WriteString("option cc_generic_services = true;\n")
 	}
 	for _, enum := range pf.GetEnums() {
-		pb.WriteString(WithComments(pi.GenEnumDefine(enum), enum.Comments))
+		pb.WriteString(WithComments(pi.GenEnumDefine(enum), enum.Comments, 0))
 	}
 	for _, msg := range pf.GetMessages() {
-		pb.WriteString(WithComments(pi.GenMessageDefine(msg), msg.Comments))
+		pb.WriteString(WithComments(pi.GenMessageDefine(msg), msg.Comments, 0))
 
 	}
 
 	for _, service := range pf.GetServices() {
-		pb.WriteString(WithComments(pi.GenServiceDefine(service), service.Comments))
+		pb.WriteString(WithComments(pi.GenServiceDefine(service), service.Comments, 0))
 	}
 
 	rf.Content = new(string)
@@ -196,6 +191,7 @@ func (pi *Plugin) DealFile(pf *protokit.PKFileDescriptor) (*pluginpb.CodeGenerat
 
 func (pi *Plugin) Generate(req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
 	rsp := new(pluginpb.CodeGeneratorResponse)
+	// only one parameter: a yaml file name
 	pi.Opts.ParseOptions(req.GetParameter())
 
 	allFiles, err := protokit.ParseCodeGenRequestAllFiles(req)
