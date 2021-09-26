@@ -19,6 +19,7 @@ const (
 type PluginOptions struct {
 	PackageReplace map[string]string `yaml:"PackageReplace"`
 	ImportReplace  map[string]string `yaml:"ImportReplace"`
+	DeleteValidate bool              `yaml:"DeleteValidate"`
 	TargetSyntax   string            `yaml:"TargetSyntax"`
 }
 
@@ -166,6 +167,11 @@ func (pi *Plugin) DealFile(pf *protokit.PKFileDescriptor) (*pluginpb.CodeGenerat
 	pb.WriteString(WithComments(fmt.Sprintf("syntax = \"%s\";\n", pi.Opts.TargetSyntax), pf.SyntaxComments, 0))
 	pb.WriteString(WithComments(fmt.Sprintf("package %s;\n", pi.ReplacePackage(pf.GetPackage())), pf.PackageComments, 0))
 	for _, dep := range pf.Dependency {
+		if pi.Opts.DeleteValidate {
+			if dep == "validate/validate.proto" {
+				continue
+			}
+		}
 		pb.WriteString(fmt.Sprintf("import \"%s\";\n", pi.ReplacePath(dep)))
 	}
 	if pf.GetOptions().GetCcGenericServices() {
