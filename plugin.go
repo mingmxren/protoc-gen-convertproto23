@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/mingmxren/protokit"
-	"google.golang.org/protobuf/types/descriptorpb"
-	"google.golang.org/protobuf/types/pluginpb"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"strings"
+
+	"github.com/mingmxren/protokit"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/pluginpb"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -165,7 +167,8 @@ func (pi *Plugin) DealFile(pf *protokit.PKFileDescriptor) (*pluginpb.CodeGenerat
 	pb := new(strings.Builder)
 
 	pb.WriteString(WithComments(fmt.Sprintf("syntax = \"%s\";\n", pi.Opts.TargetSyntax), pf.SyntaxComments, 0))
-	pb.WriteString(WithComments(fmt.Sprintf("package %s;\n", pi.ReplacePackage(pf.GetPackage())), pf.PackageComments, 0))
+	pb.WriteString(WithComments(fmt.Sprintf("package %s;\n", pi.ReplacePackage(pf.GetPackage())), pf.PackageComments,
+		0))
 	for _, dep := range pf.Dependency {
 		if pi.Opts.DeleteValidate {
 			if dep == "validate/validate.proto" {
@@ -196,7 +199,9 @@ func (pi *Plugin) DealFile(pf *protokit.PKFileDescriptor) (*pluginpb.CodeGenerat
 }
 
 func (pi *Plugin) Generate(req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
-	rsp := new(pluginpb.CodeGeneratorResponse)
+	rsp := &pluginpb.CodeGeneratorResponse{
+		SupportedFeatures: proto.Uint64(uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)),
+	}
 	// only one parameter: a yaml file name
 	pi.Opts.ParseOptions(req.GetParameter())
 
